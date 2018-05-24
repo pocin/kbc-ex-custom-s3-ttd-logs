@@ -1,0 +1,26 @@
+sudo: false
+
+services:
+  - docker
+
+before_script:
+  - docker -v
+  - docker build . -t $APP_IMAGE -t $APP_IMAGE:dev
+
+script:
+  - echo "Let's hope all is well even without tests!"
+
+after_success:
+  - docker images
+
+deploy:
+  provider: script
+  skip_cleanup: true
+  script: "./deploy.sh"
+  on:
+    tags: true
+
+branches:
+  only:
+    - master
+    - /\d+\.\d+\.\d+/

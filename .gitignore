@@ -1,0 +1,6 @@
+/vendor
+/data
+.env
+**/*.ipynb
+.pytest_cache
+__pycache__

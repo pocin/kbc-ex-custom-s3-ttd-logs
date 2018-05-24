@@ -1,0 +1,10 @@
+{
+    "#secret_key": "foobar",
+    "#access_key": "barbar",
+    "bucket_name": "bucket-name",
+    "prefix": "path/within/bucket",
+    "categories": ["clicks", "conversions", "impressions", "videoevents"]
+    "remember_downloaded": true,
+    "wipe_statefile": false
+
+}

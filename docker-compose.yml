@@ -1,0 +1,13 @@
+version: '3'
+services:
+  # for development purposes
+  dev:
+    build: .
+    image: "pocin/kbc-custom-s3-extractor:dev"
+    volumes:
+        - ./:/code
+        - ./data:/data
+    command:
+      - /bin/sh
+    env_file:
+      - .env
