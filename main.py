@@ -89,8 +89,10 @@ def main(datadir):
 def write_slice_manifest(slice_folder_path, category):
     print("Creating manifest for {} sliced table".format(slice_folder_path))
     # HARDCODED Let's hope this doesn't change
-    num_of_cols = {"clicks":17, "conversions":21,
-                   "impressions":19, "videoevents":16}[category]
+    num_of_cols = {"clicks":17,
+                   "conversions":21,
+                   "impressions":49,
+                   "videoevents":16}[category]
     manifest_path = slice_folder_path + '.manifest'
     with open(manifest_path, 'w') as manifout:
         manifest = {
