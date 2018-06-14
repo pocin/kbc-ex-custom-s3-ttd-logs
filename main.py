@@ -1,5 +1,7 @@
 import sys
 import json
+import pytz
+import datetime
 import os
 import itertools
 from operator import itemgetter
@@ -8,7 +10,6 @@ import logging
 from keboola.docker import Config
 import boto3
 
-
 def get_s3_client(access_key, secret_key):
     sess = boto3.session.Session(
         aws_access_key_id=access_key,
@@ -16,26 +17,15 @@ def get_s3_client(access_key, secret_key):
     return sess.resource('s3')
 
 
-def list_objects(s3, bucket_name, prefix, skip_keys=None):
-    skip_keys = skip_keys or set()
+def list_objects(s3, bucket_name, prefix, newer_than):
     bucket = s3.Bucket(bucket_name)
     for obj in bucket.objects.filter(Prefix=prefix):
-        if obj.key not in skip_keys:
+        if obj.last_modified > newer_than:
             # 'impressions_c....151908.log.gz'
             #  ^category ^
             filename = os.path.basename(obj.key)
             category = filename.split('_')[0]
             yield category, filename, obj
-
-def group_categories(stream_of_categories):
-    # there are 4 groups of logs s3://bucket/reds5/date=yyyy-mm-dd/hour=hh/<category>_timestamp.log.gz
-    # we process them chunk by chunk
-    for group, objects in itertools.groupby(
-            sorted(stream_of_categories, key=itemgetter(0)),
-            key=itemgetter(0)):
-        # objects == (category, filename, obj)
-        # and group == category in this case
-        yield group, objects
 
 
 def main(datadir):
@@ -51,40 +41,44 @@ def main(datadir):
     bucket_name = params['bucket_name']
     prefix = params['prefix']
 
-    categories = params.get('categories', [])
+    categories = params.get('categories')
+    if categories is None:
+        raise ValueError("Please specify which categories to download ('clicks', 'conversions', 'impressions', 'videoevents')")
 
     print("parsing statefile for already downloaded files")
-    already_downloaded = load_downloaded_files(statefile='/data/in/state.json')
+    latest_file_datetime = load_latest_downloaded_file(statefile='/data/in/state.json')
 
     s3 = get_s3_client(access_key, secret_key)
 
-    stream_of_objects = list_objects(s3, bucket_name, prefix, skip_keys=already_downloaded)
+    stream_of_objects = list_objects(s3, bucket_name, prefix, newer_than=latest_file_datetime)
 
-    for category, objects in group_categories(stream_of_objects):
-        if categories and (category not in categories):
-            print("Found category of logs '{}' but it's not in config file so skipping".format(category))
-            continue
-        elif not categories:
-            print("did not specify categories, taking all i can find!")
-        # categories are "impressions", "clicks", etc...
-        print("parsing category '{}'".format(category))
+    category_paths = {}
+    for category in categories:
         slice_path = '/data/out/tables/{}.csv'.format(category)
         print("making directory '{}' for saving slices".format(slice_path))
-        os.mkdir(slice_path)
-        for i, (_, filename, obj) in enumerate(objects):
-            actual_object = obj.get()
-            file_path = os.path.join(slice_path, filename)
-            save_one_file(file_path, actual_object['Body'])
-            already_downloaded.add(obj.key)
-            if i % 50 == 0:
-                print("Downloaded {} files".format(i))
-        print("Downloaded {} files total".format(i))
+        os.makedirs(slice_path, exist_ok=True)
+        category_paths[category] = slice_path
         write_slice_manifest(slice_path, category)
 
+    i = 0
+    for i, (category, filename, obj) in enumerate(stream_of_objects):
+        # categories are "impressions", "clicks", etc...
+        if category not in categories:
+            # we don't want these categories because they are not in the config
+            continue
+        actual_object = obj.get()
+        file_path = os.path.join(category_paths[category], filename)
+        print("Downloading {}".format(filename))
+        save_one_file(file_path, actual_object['Body'])
+        # keep track of latest downloaded file
+        latest_file_datetime = max(obj.last_modified, latest_file_datetime)
 
-    print("Saving statefile with already downloaded files")
-    with open("/data/out/state.json", "w") as fout:
-        json.dump({"already_downloaded": list(already_downloaded)}, fout)
+    print("Downloaded {} files total".format(i))
+
+    if params.get('remember_downloaded'):
+        print("Saving statefile with already downloaded files")
+        with open("/data/out/state.json", "w") as fout:
+            json.dump({"latest_downloaded_file": latest_file_datetime.timestamp()}, fout)
 
 def write_slice_manifest(slice_folder_path, category):
     print("Creating manifest for {} sliced table".format(slice_folder_path))
@@ -105,15 +99,17 @@ def write_slice_manifest(slice_folder_path, category):
 def save_one_file(outpath, stream):
     with open(outpath, 'wb') as outf:
         while True:
-            chunk = stream.read(1048)
+            chunk = stream.read(1024*40)
             if chunk:
                 outf.write(chunk)
             else:
                 break
 
-def load_downloaded_files(statefile):
+def load_latest_downloaded_file(statefile):
     with open(statefile) as sf:
-        return set(json.load(sf).get('already_downloaded', []))
+        state = json.load(sf)
+        latest_ts = state.get('latest_downloaded_file', 0)
+        return datetime.datetime.utcfromtimestamp(latest_ts).astimezone(pytz.utc)
 
 if __name__ == "__main__":
     try:
