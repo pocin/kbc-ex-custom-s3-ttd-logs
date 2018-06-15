@@ -12,7 +12,7 @@ import requests
 import logging
 from keboola.docker import Config
 import boto3
-WHEN_COMBINE_CHUNKS=1000
+WHEN_COMBINE_CHUNKS=2000
 
 def get_s3_client(access_key, secret_key):
     sess = boto3.session.Session(
@@ -42,7 +42,7 @@ def main(datadir):
     access_key = params['#access_key']
     secret_key = params['#secret_key']
 
-    combining_chunks_threshold = params.get('chunks_combining_threshol') or WHEN_COMBINE_CHUNKS
+    combining_chunks_threshold = params.get('chunks_combining_threshold') or WHEN_COMBINE_CHUNKS
 
     bucket_name = params['bucket_name']
     prefix = params['prefix']
