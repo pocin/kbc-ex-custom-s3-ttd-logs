@@ -11,8 +11,9 @@ from operator import itemgetter
 import requests
 import logging
 from keboola.docker import Config
+import pytz
 import boto3
-WHEN_COMBINE_CHUNKS=2000
+WHEN_COMBINE_CHUNKS=10000
 
 def get_s3_client(access_key, secret_key):
     sess = boto3.session.Session(
@@ -21,7 +22,8 @@ def get_s3_client(access_key, secret_key):
     return sess.resource('s3')
 
 
-def list_objects(s3, bucket_name, prefix, newer_than):
+def list_objects(s3, bucket_name, prefix, newer_than=None):
+    newer_than = newer_than or datetime.datetime(1970, 1, 1, tzinfo=pytz.utc)
     bucket = s3.Bucket(bucket_name)
     for obj in bucket.objects.filter(Prefix=prefix):
         if obj.last_modified > newer_than:
@@ -153,11 +155,12 @@ def write_slice_manifest(slice_folder_path, category):
 def save_one_file(outpath, stream):
     with open(outpath, 'wb') as outf:
         while True:
-            chunk = stream.read(1024*40)
+            chunk = stream.read(1024**2)
             if chunk:
                 outf.write(chunk)
             else:
                 break
+
 
 def load_latest_downloaded_file(statefile):
     with open(statefile) as sf:
