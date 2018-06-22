@@ -13,7 +13,53 @@ import logging
 from keboola.docker import Config
 import pytz
 import boto3
+
 WHEN_COMBINE_CHUNKS=10000
+
+COLUMNS = {
+    "conversions": [
+        "LogEntryTime", "ConversionId", "AdvertiserId", "ConversionType", "TDID",
+        "IPAddress", "ReferrerURL", "MonetaryValue", "MonetaryValueCurrency",
+        "OrderId", "custom1", "custom2", "custom3", "custom4", "custom5",
+        "custom6", "custom7", "custom8", "custom9", "custom10", "ProcessTime"
+    ],
+    "videoevents": [
+        "LogEntryTime", "ImpressionId", "VideoEventCreativeView",
+        "VideoEventStart", "VideoEventFirstQuarter", "VideoEventMidPoint",
+        "VideoEventThirdQuarter", "VideoEventComplete", "VideoEventMuted",
+        "VideoEventUnmuted", "CreativeIsTrackable", "CreativeWasViewable",
+        "VideoPlayTimeInSeconds", "VideoViewableTimeInSeconds",
+        "VideoEventCompanionCreativeView", "ProcessTime"
+    ],
+    "clicks": [
+        "LogEntryTime", "ClickId", "IPAddress", "ReferrerURL", "RedirectURL",
+        "CampaignID", "ChannelID", "AdvertiserID", "DisplayImpressionID",
+        "Keyword", "KeywordID", "MatchType", "DistributionNetwork",
+        "TDID", "RawUrl", "ProcessedTime", "DeviceID"
+    ],
+    "impressions": [
+        "LogEntryTime", "ImpressionId", "PartnerId", "AdvertiserId",
+        "CampaignId", "AdGroupId", "PrivateContractID", "AudienceID",
+        "CreativeId", "AdFormat", "Frequency", "SupplyVendor",
+        "SupplyVendorPublisherID", "DealID", "Site", "ReferrerCategoriesList",
+        "FoldPosition", "UserHourOfWeek", "UserAgent", "IPAddress", "TDID",
+        "Country", "Region", "Metro", "City", "DeviceType", "OSFamily", "OS",
+        "Browser", "Recency", "LanguageCode", "MediaCost", "FeeFeatureCost",
+        "DataUsageTotalCost", "TTDCostInUSD", "PartnerCostInUSD",
+        "AdvertiserCostInUSD", "Latitude", "Longitude", "DeviceID", "ZipCode",
+        "ProcessedTime", "DeviceMake", "DeviceModel", "RenderingContext",
+        "CarrierID", "TemperatureInCelsiusName",
+        "TemperatureBucketStartInCelsiusName", "TemperatureBucketEndInCelsiusName"
+    ]
+}
+PRIMARY_KEYS = {
+    "conversions": ["ConversionId"],
+    "viedoevents": ["ImpressionId"],
+    "clicks": ["ClickId"],
+    "impressions": ["ImpressionId"]
+}
+
+
 
 def get_s3_client(access_key, secret_key):
     sess = boto3.session.Session(
@@ -138,15 +184,15 @@ def combine_chunks(tmp_dir, final_dir, clean_tmp_dir=True):
 
 def write_slice_manifest(slice_folder_path, category):
     logging.info("Creating manifest for {} sliced table".format(slice_folder_path))
-    # HARDCODED Let's hope this doesn't change
-    num_of_cols = {"clicks":17,
-                   "conversions":21,
-                   "impressions":49,
-                   "videoevents":16}[category]
+    columns = COLUMNS[category]
+    pk = PRIMARY_KEYS[category]
+
     manifest_path = slice_folder_path + '.manifest'
     with open(manifest_path, 'w') as manifout:
         manifest = {
-            'columns': ['col_{}'.format(i) for i in range(num_of_cols)],
+            'columns': columns,
+            'primary_key': pk,
+            'incremental': True,
             'delimiter': "\t",
             }
         json.dump(manifest, manifout)
