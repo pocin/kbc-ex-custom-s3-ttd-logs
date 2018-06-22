@@ -168,10 +168,12 @@ def combine_chunks(tmp_dir, final_dir, clean_tmp_dir=True):
     final_combined_path = pj(final_dir, 'chunk_'+ nonce + '.csv')
     logging.info("combining chunks from %s to %s", tmp_dir, final_combined_path)
 
-    decompress_cmd = 'gzip -d ' + pj(tmp_dir, '*.gz')
+    decompress_cmd = "find {tmp_dir} -name '*.gz' -exec gzip -d {{}} \;".format(tmp_dir=tmp_dir)
     logging.debug("decompressing %s", decompress_cmd)
     subprocess.check_call(decompress_cmd, shell=True)
-    cat_cmd = 'cat ' + pj(tmp_dir, '*.log') + ' > ' + final_combined_path
+    cat_cmd = "find {tmp_dir} -name '*.log' | xargs cat > {final_path}".format(
+        tmp_dir=tmp_dir,
+        final_path=final_combined_path)
     logging.debug("merging with %s", cat_cmd)
     subprocess.check_call(cat_cmd, shell=True)
     if clean_tmp_dir:
