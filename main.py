@@ -54,7 +54,7 @@ COLUMNS = {
 }
 PRIMARY_KEYS = {
     "conversions": ["ConversionId"],
-    "viedeovents": ["ImpressionId"],
+    "videoevents": ["ImpressionId"],
     "clicks": ["ClickId"],
     "impressions": ["ImpressionId"]
 }
