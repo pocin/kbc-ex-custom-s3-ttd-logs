@@ -196,6 +196,7 @@ def write_slice_manifest(slice_folder_path, category):
             'primary_key': pk,
             'incremental': True,
             'delimiter': "\t",
+            'enclosure': ''
             }
         json.dump(manifest, manifout)
     return manifest_path
