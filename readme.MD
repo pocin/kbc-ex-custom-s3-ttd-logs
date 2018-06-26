@@ -18,10 +18,21 @@ This would download all logs (the actual files) with prefixes `["clicks", "conve
 and remmeber the downloaded files in statefile for the next run 
 
 
-The option `    "chunks_combining_threshold": 2000,` controls how many logs are con`cat`enated into one (the logs are typically <3kB in size and there are thousands of them!)
+The (optional) option "chunks_combining_threshold": 10000,` controls how many logs are con`cat`enated into one (the logs are typically <3kB in size and there are thousands of them!) 10000 is the default value and a good value
 
 if you want to clean the statefile, just run the config with `"wipe_statefile": true` parameter, it will ignore remaining parameters, clean statefile and exit
 
-Columns are automatically added to the log columns `col_{0..X}`
 
-Each job overwrites the previous in storage
+If you want to run daily jobs use this config
+```
+{
+    "#access_key": "key",
+    "#secret_key": "secret",
+    "bucket_name": "thetradedesk-useast-partner-datafeed",
+    "custom_date": "yesterday UTC",
+    "prefix": "amnet aud/redf5/date=$custom_date$",
+    "categories": ["clicks", "conversions", "impressions", "videoevents"]
+}
+```
+
+Tables are loaded incrementally (columns are set automatically)

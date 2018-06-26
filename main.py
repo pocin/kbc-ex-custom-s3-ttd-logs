@@ -7,6 +7,7 @@ import subprocess
 import datetime
 import os
 import itertools
+import dateparser
 from operator import itemgetter
 import requests
 import logging
@@ -15,7 +16,7 @@ import pytz
 import boto3
 
 WHEN_COMBINE_CHUNKS=10000
-
+CUSTOM_DATE_TOKEN = '$custom_date$'
 COLUMNS = {
     "conversions": [
         "LogEntryTime", "ConversionId", "AdvertiserId", "ConversionType", "TDID",
@@ -69,7 +70,6 @@ def get_s3_client(access_key, secret_key):
 
 
 def list_objects(s3, bucket_name, prefix, newer_than=None):
-    newer_than = newer_than or datetime.datetime(1970, 1, 1, tzinfo=pytz.utc)
     bucket = s3.Bucket(bucket_name)
     for obj in bucket.objects.filter(Prefix=prefix):
         if obj.last_modified > newer_than:
@@ -90,6 +90,8 @@ def main(datadir):
     access_key = params['#access_key']
     secret_key = params['#secret_key']
 
+    s3 = get_s3_client(access_key, secret_key)
+
     combining_chunks_threshold = params.get('chunks_combining_threshold') or WHEN_COMBINE_CHUNKS
 
     bucket_name = params['bucket_name']
@@ -99,11 +101,27 @@ def main(datadir):
     if categories is None:
         raise ValueError("Please specify which categories to download ('clicks', 'conversions', 'impressions', 'videoevents')")
 
-    logging.info("parsing statefile for already downloaded files")
-    latest_file_datetime = load_latest_downloaded_file(statefile='/data/in/state.json')
-
-    s3 = get_s3_client(access_key, secret_key)
-
+    custom_date = params.get("custom_date")
+    if custom_date:
+        parsed_custom_date = dateparser.parse(custom_date).strftime("%Y-%m-%d")
+        if parsed_custom_date is None:
+            raise ValueError("Couldn't parse {} into datetime".format(custom_date))
+        else:
+            logging.info("parsing %s as %s", custom_date, parsed_custom_date)
+        if CUSTOM_DATE_TOKEN not in prefix:
+            raise ValueError(
+                ('if you use "custom_date" you must'
+                 ' also specify {} inside the "prefix"').format(
+                     CUSTOM_DATE_TOKEN))
+        else:
+            prefix = prefix.replace(CUSTOM_DATE_TOKEN, parsed_custom_date)
+            logging.info("Final prefix is %s", prefix)
+    if params.get('remember_downloaded'):
+        logging.info("parsing statefile for timestamp of latest downloaded file")
+        latest_file_datetime = load_latest_downloaded_file(statefile='/data/in/state.json')
+    else:
+        logging.info("neglecting latest downloaded file")
+        latest_file_datetime = datetime.datetime(1970, 1, 1, tzinfo=pytz.utc)
     stream_of_objects = list_objects(s3, bucket_name, prefix, newer_than=latest_file_datetime)
 
     category_paths = {}
@@ -156,7 +174,9 @@ def main(datadir):
     if params.get('remember_downloaded'):
         logging.info("Saving statefile with already downloaded files")
         with open("/data/out/state.json", "w") as fout:
-            state = {"latest_downloaded_file": latest_file_datetime.timestamp()}
+            state = {
+                "latest_downloaded_file": latest_file_datetime.timestamp()
+            }
             logging.debug(json.dumps(state))
 
             json.dump(state, fout)
