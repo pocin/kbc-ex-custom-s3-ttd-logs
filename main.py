@@ -2,6 +2,7 @@ import sys
 import json
 import time
 from hashlib import md5
+from pathlib import Path
 import pytz
 import subprocess
 import datetime
@@ -191,14 +192,15 @@ def combine_chunks(tmp_dir, final_dir, clean_tmp_dir=True):
     decompress_cmd = "find {tmp_dir} -name '*.gz' -exec gzip -d {{}} \;".format(tmp_dir=tmp_dir)
     logging.debug("decompressing %s", decompress_cmd)
     subprocess.check_call(decompress_cmd, shell=True)
-    cat_cmd = "find {tmp_dir} -name '*.log' | xargs cat > {final_path}".format(
-        tmp_dir=tmp_dir,
-        final_path=final_combined_path)
-    logging.debug("merging with %s", cat_cmd)
-    subprocess.check_call(cat_cmd, shell=True)
-    if clean_tmp_dir:
-        logging.debug("cleaning up")
-        subprocess.check_call('rm ' + pj(tmp_dir, '*.log'), shell=True)
+    tmp_dir = Path(tmp_dir)
+
+    with Path(final_combined_path).open('w') as outf:
+        for tmp_log in tmp_dir.glob('*.log'):
+            with tmp_log.open() as inf:
+                for line in inf:
+                    outf.write(line.replace('\\\t', '\t'))
+            if clean_tmp_dir:
+                tmp_log.unlink()
 
     logging.info("Combined")
     return final_combined_path
